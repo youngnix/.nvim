@@ -1,278 +1,253 @@
-vim.g.netrw_alto       = 1
-vim.g.netrw_altv       = 1
-vim.g.netrw_banner     = 0
-vim.g.netrw_liststyle  = 0
-vim.g.netrw_preview    = 1
-vim.g.netrw_winsize    = 20
+-- require("completion")
+require("options")
 
-vim.g.mapleader        = ' '
-vim.g.maplocalleader   = vim.g.mapleader
+local cwd_hist_path = vim.fn.expand(vim.fn.stdpath("cache") .. "/cwd.hist")
 
-vim.opt.completeopt    = 'menu,menuone,noselect'
-vim.opt.hlsearch       = false
-vim.opt.laststatus     = 3
-vim.opt.linebreak      = true
-vim.opt.mouse          = ''
+update_cwd_hist = function(path)
+	local cwd_hist = io.open(cwd_hist_path, "r")
 
-vim.opt.number         = true
-vim.opt.relativenumber = true
-vim.opt.ruler          = true
-vim.opt.showcmd        = true
-vim.opt.signcolumn     = 'yes'
-vim.opt.shortmess      = 'oOWsFtCcIaT'
+	local tmp = ""
 
-vim.opt.smartcase      = true
-vim.opt.ignorecase     = true
+	if path ~= nil then
+		path = vim.fn.expandcmd(path)
+		tmp = tmp .. path .. '\n'
+	end
 
-vim.opt.sidescrolloff  = 999
-vim.opt.scrolloff      = 999
-vim.opt.splitbelow     = true
-vim.opt.splitright     = true
+	for l in cwd_hist:lines() do
+		if l ~= path and vim.uv.fs_stat(l) then
+			tmp = tmp .. l .. '\n'
+		end
+	end
 
-vim.opt.undofile       = true
+	cwd_hist:close()
+	cwd_hist = io.open(cwd_hist_path, "w")
 
-vim.opt.lazyredraw     = true
-vim.opt.redrawtime     = 500
+	if cwd_hist == nil then
+		return
+	end
 
-vim.opt.updatetime     = 250
-vim.opt.cindent        = true
-vim.opt.cinoptions     = "Ns"
-vim.opt.expandtab      = true
-vim.opt.preserveindent = true
-vim.opt.autoindent     = true
-vim.opt.tabstop        = 4
-vim.opt.shiftwidth     = 4
-vim.opt.softtabstop    = 0
+	cwd_hist:write(tmp)
 
-vim.opt.smartindent    = true
-vim.opt.copyindent     = true
-vim.opt.expandtab      = false
-vim.opt.preserveindent = true
-vim.opt.shiftwidth     = 4
-vim.opt.tabstop        = 4
+	cwd_hist:close()
+end
+vim.api.nvim_create_autocmd("VimEnter", {
+	callback = function(ev)
+		update_cwd_hist(nil)
+	end,
+})
 
-vim.opt.backspace      = 'indent,eol,start'
-vim.opt.colorcolumn    = '120'
+vim.api.nvim_create_autocmd("DirChanged", {
+	pattern = "global",
+	callback = function(ev)
+		update_cwd_hist(ev.file)
+	end,
+})
 
-vim.opt.concealcursor  = 'nv'
-vim.opt.conceallevel   = 0
+vim.keymap.set('n', '[b', '<CMD>bprev<CR>')
+vim.keymap.set('n', ']b', '<CMD>bnext<CR>')
 
-vim.opt.incsearch      = true
-vim.opt.numberwidth    = 1
-vim.opt.redrawtime     = 500
+vim.keymap.set("n", "[l", function()
+	if pcall(vim.cmd.lprev) or pcall(vim.cmd.llast) then
+		return
+	end
 
-vim.opt.timeout        = true
-vim.opt.timeoutlen     = 1000
-vim.opt.ttimeout       = true
-vim.opt.ttimeoutlen    = 10
-vim.opt.fillchars      = { eob = " " }
+	vim.print("No location entries.")
+end, {silent = true, noremap = true})
 
-vim.opt.wildmenu       = true
-vim.opt.wildignorecase = true
-vim.opt.wrap           = true
+vim.keymap.set("n", "]l", function()
+	if pcall(vim.cmd.lnext) or pcall(vim.cmd.lfirst) then
+		return
+	end
 
-vim.opt.path:append("**")
-vim.opt.isfname:append("@-@")
+	vim.print("No location entries.")
+end, {silent = true, noremap = true})
 
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+vim.keymap.set("n", "[c", function()
+	if pcall(vim.cmd.cprev) or pcall(vim.cmd.clast) then
+		return
+	end
+
+	vim.print("No quickfix entries.")
+end, {silent = true, noremap = true})
+
+vim.keymap.set("n", "]c", function()
+	if pcall(vim.cmd.cnext) or pcall(vim.cmd.cfirst) then
+		return
+	end
+
+	vim.print("No quickfix entries.")
+end, {silent = true, noremap = true})
+
+vim.keymap.set("n", "<Space>c", "<CMD>make! check<CR>", {silent = true, noremap = true})
+vim.keymap.set("n", "<Space>r", "<CMD>make! run<CR>", {silent = true, noremap = true})
+
+vim.keymap.set("n", "<leader>j", "<CMD>terminal<CR>", {silent = true})
+
+vim.api.nvim_create_autocmd({ 'BufWinEnter' }, {
+	group = vim.api.nvim_create_augroup('RecallCursor', { clear = true }),
+	command = 'silent! normal! g`"zv',
+})
+
+local scratch_buf = nil
+
+vim.keymap.set({ 'n' }, '<Space>w', vim.cmd.write)
+
+vim.keymap.set({ 'n' }, '<leader>s', function()
+	if not scratch_buf or not vim.api.nvim_buf_is_valid(scratch_buf) then
+		scratch_buf = vim.api.nvim_create_buf(true, true)
+	end
+
+	pcall(vim.cmd.buffer, scratch_buf)
+end, { silent = true, noremap = true })
+
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
+
+vim.cmd.autocmd("TermOpen * startinsert")
 
 if not vim.loop.fs_stat(lazypath) then
 	vim.fn.system({
-		"git",
-		"clone",
-		"--filter=blob:none",
-		"https://github.com/folke/lazy.nvim.git",
-		"--branch=stable",
+		'git',
+		'clone',
+		'--filter=blob:none',
+		'https://github.com/folke/lazy.nvim.git',
+		'--branch=stable',
 		lazypath,
 	})
 end
 
 vim.opt.rtp:prepend(lazypath)
 
-vim.api.nvim_create_autocmd("FileType", {
-	pattern = "tex",
-	callback = function()
-	end
-})
+vim.g.colorscheme = 'gruvbox-material'
 
-require("lazy").setup({
+require('lazy').setup({
+	'preservim/vim-markdown',
 	{
-		"ThePrimeagen/vim-be-good",
-	},
-	{
-		"xiyaowong/transparent.nvim",
-	},
-	{
-		'nvim-tree/nvim-web-devicons'
-	},
-	{
-		'nvim-lualine/lualine.nvim',
-		lazy = false,
+		'sainnhe/gruvbox-material',
 		config = function()
-			require("lualine").setup({
-				options = {
-					theme = "kanagawa",
-					section_separators = { left = '', right = '' },
-					component_separators = { left = '', right = '' }
+			-- vim.g.gruvbox_material_background = 'soft'
+			-- vim.g.gruvbox_material_foreground = 'original'
+			vim.g.gruvbox_material_transparent_background = true
+			vim.g.gruvbox_material_enable_italic = true
+			vim.g.gruvbox_material_better_performance = true
+		end
+	},
+	{
+		"mfussenegger/nvim-jdtls",
+	},
+	{
+		'ibhagwan/fzf-lua',
+		config = function()
+			local fzf = require("fzf-lua")
+
+			fzf.setup({
+				fzf_bin = 'sk',
+			})
+
+			local default_cd_action = function(s)
+				if s then
+					vim.fn.chdir(s[1])
+				end
+			end
+
+			vim.keymap.set("n", "<leader>o", function() fzf.files{} end)
+			vim.keymap.set("n", "<leader>i", function() fzf.lsp_live_workspace_symbols{} end)
+			vim.keymap.set("n", "<leader>l", function() fzf.live_grep{
+				winopts = {
+					preview = {
+						hidden = "hidden",
+					},
 				}
-			})
-		end
-	},
-	{
-		"nvimdev/dashboard-nvim",
-		event = "VimEnter",
-		opts = {
-			theme = 'doom',
-			config = {
-				header = {
-					[[]],
-					[[       .--.                   .---.   ]],
-					[[   .---|__|           .-.     |~~~|   ]],
-					[[.--|===|--|_          |_|     |~~~|--.]],
-					[[|  |===|  |'\     .---!~|  .--|   |--|]],
-					[[|%%|   |  |.'\    |===| |--|%%|   |  |]],
-					[[|%%|   |  |\.'\   |   | |__|  |   |  |]],
-					[[|  |   |  | \  \  |===| |==|  |   |  |]],
-					[[|  |   |__|  \.'\ |   |_|__|  |~~~|__|]],
-					[[|  |===|--|   \.'\|===|~|--|%%|~~~|--|]],
-					[[^--^---'--^    `-'`---^-^--^--^---'--']],
-					[[]],
-				},
-				footer = {
-					"Have you done your daily tasks?",
-				},
-				disable_move = true,
-				center = {
-					{
-						icon = "📓 ",
-						desc = "Notes",
-						group = "@property",
-						action = "Neorg index",
-						key = "n",
-					},
-					{
-						icon = "📔 ",
-						desc = "Journal",
-						group = "@property",
-						action = "Neorg journal toc open",
-						key = "j",
-					},
-					{
-						icon = "⏪️ ",
-						desc = "Yesterday",
-						group = "@property",
-						action = "Neorg journal yesterday",
-						key = "y",
-					},
-					{
-						icon = "📆 ",
-						desc = "Today",
-						group = "@property",
-						action = "Neorg journal today",
-						key = "t",
-					},
-					{
-						icon = "⏩ ",
-						desc = "Tomorrow",
-						group = "@property",
-						action = "Neorg journal tomorrow",
-						key = "m",
-					},
-					{
-						icon = "🛠️ ",
-						desc = "Configuration",
-						group = "@property",
-						action = "e ~/.config/nvim/init.lua",
-						key = "c",
-					},
-				},
-			}
-		},
-	},
-	{
-		"rebelot/kanagawa.nvim",
-		config = function()
-			vim.cmd.colorscheme("kanagawa")
-		end,
-	},
-	{
-		"folke/which-key.nvim",
-		config = function()
-			require("which-key").setup({})
-		end
-	},
-	{
-		"lukas-reineke/headlines.nvim",
-	},
-	{
-		"nvim-telescope/telescope.nvim",
-		config = function()
-			local builtin = require('telescope.builtin')
-			local actions = require('telescope.actions')
+			} end)
 
-			vim.keymap.set('n', '<leader>ff', builtin.find_files, {})
-			vim.keymap.set('n', '<leader>fg', builtin.live_grep, {})
-			vim.keymap.set('n', '<leader>fb', builtin.buffers, {})
-			vim.keymap.set('n', '<leader>fh', builtin.help_tags, {})
-			require('telescope').setup {
-				defaults = {
-					mappings = {
-						i = {
-							["<Esc>"] = actions.close,
-							["<C-u>"] = false,
-						}
-					}
-				},
-				pickers = {},
-				extensions = {}
-			}
-		end,
-	},
-	{
-		"nvim-neorg/neorg-telescope",
-	},
-	{
-		"nvim-neorg/neorg",
-		lazy = false,
-		version = "*",
-		config = function()
-			require("neorg").setup({
-				load = {
-					['core.defaults'] = {},
-					["core.export"] = {},
-					["core.export.markdown"] = {
-						config = {
-							extensions = "all",
-						},
+			vim.keymap.set("n", "<leader>n", function()
+				fzf.fzf_exec("find -type d -maxdepth 1", {
+					actions = {
+						['default'] = default_cd_action,
 					},
-					["core.integrations.telescope"] = {
-						config = {
-							insert_file_link = {
-								show_title_preview = true,
-							},
-						}
+				})
+			end)
+
+			vim.keymap.set("n", "<leader>p", function()
+				local remove_from_cwd_hist = function(s)
+					local cwd_hist = io.open(cwd_hist_path, "r")
+
+					local tmp = ""
+
+					for l in cwd_hist:lines() do
+						if not vim.list_contains(s, l) then
+							tmp = tmp .. l .. '\n'
+						end
+					end
+
+					cwd_hist:close()
+					cwd_hist = io.open(cwd_hist_path, "w")
+
+					if cwd_hist == nil then
+						return
+					end
+
+					cwd_hist:write(tmp)
+
+					cwd_hist:close()
+				end
+
+				update_cwd_hist(nil)
+
+				fzf.fzf_exec("cat "..cwd_hist_path, {
+					prompt = "CD ❯ ",
+					fzf_opts = {
+						['-m'] = true,
+						['--exact'] = true,
+						['--no-sort'] = true,
 					},
-					['core.concealer'] = {},
-					['core.ui.calendar'] = {},
-					['core.dirman'] = {
-						config = {
-							workspaces = {
-								notes = "~/Notes",
-							},
-							default_workspace = "notes",
-						},
+					preview = "ls --color=always -1 {1}",
+					actions = {
+						['default'] = default_cd_action,
+						['ctrl-d'] = remove_from_cwd_hist,
 					},
-				},
-			})
+				})
+			end)
+
+			vim.keymap.set("n", "<leader>t", function()
+				vim.cmd.lgrep('"(TODO|FIX).*:" '.. vim.uv.cwd())
+			end)
 		end,
 	},
 	{
 		'mbbill/undotree',
 		config = function()
-			vim.keymap.set("n", "<leader>u", "<cmd>UndotreeShow<CR>", { silent = true, noremap = true })
+			vim.keymap.set("n", "<leader>u", "<CMD>UndotreeShow<CR>", {silent = true, noremap = true})
 		end,
 	},
-	{ 'hrsh7th/cmp-nvim-lsp' },
+	{
+		'nvim-treesitter/nvim-treesitter',
+		build = ':TSUpdate',
+		config = function()
+			require('nvim-treesitter.configs').setup({
+				enable = true,
+				sync_install = false,
+				auto_install = true,
+
+				incremental_selection = {
+					enable = true,
+				},
+
+				textobjects = {
+					enable = true,
+				},
+
+				highlight = {
+					enable = true,
+					additional_vim_regex_highlighting = false,
+				},
+
+				indent = {
+					enable = true,
+				},
+			})
+		end,
+	},
+		{ 'hrsh7th/cmp-nvim-lsp' },
 	{ 'hrsh7th/cmp-buffer' },
 	{ 'hrsh7th/cmp-path' },
 	{ 'hrsh7th/cmp-cmdline' },
@@ -283,12 +258,11 @@ require("lazy").setup({
 		event = { "InsertEnter", "CmdlineEnter" },
 		config = function()
 			local cmp = require("cmp")
-			local luasnip = require("luasnip")
 
 			cmp.setup {
 				snippet = {
 					expand = function(args)
-						luasnip.lsp_expand(args.body)
+						vim.snippet.expand(args.body)
 					end,
 				},
 				mapping = cmp.mapping.preset.insert({
@@ -317,7 +291,7 @@ require("lazy").setup({
 				}),
 				sources = cmp.config.sources({
 					{ name = 'nvim_lsp' },
-					{ name = 'luasnip' },
+					{ name = 'snippet' },
 					{ name = 'path' },
 				}, {
 					{ name = 'buffer' },
@@ -352,6 +326,21 @@ require("lazy").setup({
 					}
 				})
 			})
+		end,
+	},
+	{
+		'echasnovski/mini.splitjoin',
+		config = function()
+			require("mini.splitjoin").setup()
+		end,
+	},
+	{
+		'bkad/CamelCaseMotion',
+		config = function()
+			vim.keymap.set({"n", "v"}, "w", "<Plug>CamelCaseMotion_w", {silent = true, remap = true})
+			vim.keymap.set({"n", "v"}, "b", "<Plug>CamelCaseMotion_b", {silent = true, remap = true})
+			vim.keymap.set({"n", "v"}, "e", "<Plug>CamelCaseMotion_e", {silent = true, remap = true})
+			vim.keymap.set({"n", "v"}, "ge", "<Plug>CamelCaseMotion_ge", {silent = true, remap = true})
 		end,
 	},
 	{ 'williamboman/mason-lspconfig.nvim' },
@@ -397,40 +386,10 @@ require("lazy").setup({
 					vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
 					vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
 					vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
-
-					vim.api.nvim_create_autocmd("CursorHold", {
-						buffer = ev.buf,
-						callback = function()
-							local opts = {
-								focusable = false,
-								close_events = { "BufLeave", "CursorMoved", "InsertEnter", "FocusLost" },
-								border = 'rounded',
-								source = 'always',
-								prefix = ' ',
-								scope = 'cursor',
-							}
-
-							vim.diagnostic.open_float(opts)
-						end
-					})
 				end,
 			})
 
-			local on_attach = function(client, bufnr)
-				if client.server_capabilities.inlayHintProvider then
-					vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
-				end
-
-				if client.server_capabilities.documentFormattingProvider then
-					vim.api.nvim_create_autocmd("BufWritePre", {
-						group = vim.api.nvim_create_augroup("Formatting", { clear = true }),
-						buffer = bufnr,
-						callback = function(ev)
-							vim.lsp.buf.format({ buffer = bufnr })
-						end,
-					})
-				end
-			end
+			-- vim.diagnostic.disable()
 
 			local handlers = {
 				function(server_name)
@@ -459,104 +418,37 @@ require("lazy").setup({
 						root_dir = vim.loop.cwd,
 					})
 				end,
-				["emmet_language_server"] = function(server_name)
-					local custom_filetypes = {
-						"php",
+				["jdtls"] = function(server_name)
+					local opts = {
+    				filetypes = { "java" },
+    				capabilities = capabilities,
+    				on_attach = on_attach,
+    				root_dir = vim.fs.dirname(vim.fs.find({'gradlew', '.git', 'mvnw'}, { upward = true })[1]),
 					}
 
-					lspconfig[server_name].setup({
-						capabilities = capabilities,
-						on_attach = on_attach,
-						filetypes = vim.tbl_extend("force",
-							lspconfig[server_name].document_config.default_config.filetypes, custom_filetypes)
-					})
+					lspconfig["jdtls"].setup(opts)
 				end,
 			}
 
 			require('mason').setup()
 			require('mason-lspconfig').setup({ handlers = handlers })
-
-			lspconfig['clangd'].setup({})
-			lspconfig['jdtls'].setup({})
-
-			lspconfig['gdscript'].setup({
-				port = 6005,
-				host = '127.0.0.1',
-				flags = {
-					debounce_text_changes = 150,
-				}
-			})
 		end,
 	},
 	{
-		"nvim-treesitter/nvim-treesitter",
-		build = ":TSUpdate",
+		'smoka7/hop.nvim',
 		config = function()
-			require("nvim-treesitter.configs").setup({
-				sync_install = false,
-				auto_install = true,
-				enable = true,
-				ensure_installed = {
-					"lua",
-					"php",
-					"html",
-					"css",
-					"javascript",
-				},
+			require('hop').setup()
 
-				incremental_selection = {
-					enable = true,
-				},
-
-				textobjects = {
-					enable = true,
-				},
-
-				highlight = {
-					enable = true,
-					additional_vim_regex_highlighting = false,
-				},
-
-				indent = {
-					enable = true,
-					disable = {
-						"gdscript",
-					},
-				},
-			})
+			vim.keymap.set('n', 'gw', '<CMD>HopWord<CR>', {remap = true, silent = true})
 		end,
 	},
 	{
-		"windwp/nvim-autopairs",
-		lazy = true,
-		event = { "InsertEnter" },
-		config = function()
-			local cmp_autopairs = require('nvim-autopairs.completion.cmp')
-			local cmp = require('cmp')
-
-			cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
-
-			require("nvim-autopairs").setup({
-				check_ts = true,
-				enable_check_bracket_line = false
-			})
-		end,
+		"Shatur/neovim-ayu",
 	},
 	{
-		"kylechui/nvim-surround",
-		version = "*",
-		event = "VeryLazy",
-		config = function()
-			require("nvim-surround").setup()
-		end
-	},
-	{
-		"nvim-tree/nvim-web-devicons",
-		lazy = true,
-		opts = {
-			color_icons = true,
-			default = true,
-			strict = true,
-		}
+		'swamp',
+		dir = "/home/andrei/.config/nvim/swamp",
 	},
 })
+
+vim.cmd.colorscheme(vim.g.colorscheme)
